@@ -14,25 +14,22 @@ const fetchAIResponse = async (
   caseContext: any | null = null,
   documentContext: string | null = null
 ): Promise<string> => {
+  console.log('AI Request:', { prompt, caseContext, documentContext });
   await new Promise(resolve => setTimeout(resolve, 1500));
 
-  if (prompt.toLowerCase().includes('draft') || prompt.toLowerCase().includes('write')) {
-    return 'I have drafted the document based on your requirements...';
+  if (prompt.toLowerCase().includes('draft')) {
+    return 'Drafted document:\n\n[Legal formatted content based on case data]';
   }
-
-  if (prompt.toLowerCase().includes('analyze') || prompt.toLowerCase().includes('review')) {
-    return 'Based on my analysis of the document, here are my observations...';
+  if (prompt.toLowerCase().includes('analyze')) {
+    return 'Analysis:\n\n1. Clause 3.2 ambiguous.\n2. Indemnity favors other party.\n3. Review compliance in Section 7.';
   }
-
   if (prompt.toLowerCase().includes('summarize')) {
-    return 'Summary of the document: This is a mortgage foreclosure complaint...';
+    return 'Summary:\n\nMortgage foreclosure complaint for 123 Main St, $12,500 arrears, $275,000 principal.';
   }
-
-  if (prompt.toLowerCase().includes('deadline') || prompt.toLowerCase().includes('timeline')) {
-    return 'Key deadlines to be aware of: ...';
+  if (prompt.toLowerCase().includes('deadline')) {
+    return 'Deadlines:\n\n- 21 days to respond\n- Default after 22\n- Redemption: 6 months\n- Sale: 30-45 days after judgment.';
   }
-
-  return 'I\'ve analyzed your request... Would you like me to draft, review, or summarize something?';
+  return 'Please specify if you need a draft, analysis, summary, or timeline.';
 };
 
 interface Message {
@@ -70,12 +67,14 @@ export default function AIAssistantPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMessages([{
-      id: '1',
-      sender: 'ai',
-      content: 'Hello! I\'m your AI legal assistant...',
-      timestamp: new Date()
-    }]);
+    setMessages([
+      {
+        id: '1',
+        sender: 'ai',
+        content: 'Hi! I’m your AI legal assistant. Ask me to draft, review, summarize or suggest legal strategies.',
+        timestamp: new Date()
+      }
+    ]);
     fetchCases();
   }, []);
 
@@ -95,26 +94,20 @@ export default function AIAssistantPage() {
   }, [selectedDocumentId]);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const fetchCases = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('firm_id')
-          .eq('id', user.id)
-          .single();
-
+        const { data: userData } = await supabase.from('users').select('firm_id').eq('id', user.id).single();
         if (userData?.firm_id) {
           const { data } = await supabase
             .from('cases')
             .select('id, title, case_number, case_type, status')
             .eq('firm_id', userData.firm_id)
             .order('created_at', { ascending: false });
-
           if (data) setCases(data);
         }
       }
@@ -125,16 +118,11 @@ export default function AIAssistantPage() {
 
   const fetchCaseDetails = async (caseId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('cases')
-        .select(`
-          *,
-          client:client_id(id, first_name, last_name, organization_name, email, phone),
-          opposing_party:opposing_party_id(id, first_name, last_name, organization_name, email, phone)
-        `)
+        .select(`*, client:client_id(id, first_name, last_name, organization_name, email, phone), opposing_party:opposing_party_id(id, first_name, last_name, organization_name, email, phone)`)
         .eq('id', caseId)
         .single();
-      if (error) throw error;
       setSelectedCase(data);
     } catch (error) {
       console.error('Error fetching case details:', error);
@@ -143,14 +131,12 @@ export default function AIAssistantPage() {
 
   const fetchCaseDocuments = async (caseId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('documents')
         .select('id, name, document_type, file_path')
         .eq('case_id', caseId)
         .eq('is_template', false)
         .order('created_at', { ascending: false });
-
-      if (error) throw error;
       setDocuments(data || []);
       setSelectedDocumentId('');
     } catch (error) {
@@ -159,7 +145,7 @@ export default function AIAssistantPage() {
   };
 
   const fetchDocumentContent = async (documentId: string) => {
-    setDocumentContent('MORTGAGE FORECLOSURE COMPLAINT\n\n...');
+    setDocumentContent('Sample document: Mortgage Foreclosure Complaint...');
   };
 
   const handleSendMessage = async () => {
@@ -185,24 +171,17 @@ export default function AIAssistantPage() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
-    } catch {
+    } catch (err) {
+      console.error('AI error:', err);
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        content: 'Sorry, I encountered an error processing your request.',
+        content: 'Something went wrong. Please try again.',
         timestamp: new Date()
       }]);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -216,12 +195,12 @@ export default function AIAssistantPage() {
         <div className="lg:col-span-3">
           <Card className="flex flex-col h-[calc(100vh-12rem)]">
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map(message => (
-                <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-3/4 rounded-lg px-4 py-2 ${message.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'}`}>
-                    <div className="whitespace-pre-line">{message.content}</div>
-                    <div className={`text-xs mt-1 ${message.sender === 'user' ? 'text-blue-200' : 'text-gray-400'}`}>
-                      {formatTimestamp(message.timestamp)}
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-3/4 rounded-lg px-4 py-2 ${msg.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'}`}>
+                    <div className="whitespace-pre-line">{msg.content}</div>
+                    <div className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-200' : 'text-gray-400'}`}>
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                 </div>
@@ -255,47 +234,40 @@ export default function AIAssistantPage() {
           </Card>
         </div>
 
-        <div className="lg:col-span-1">
-          <Card className="mb-6">
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
             <h2 className="text-lg font-medium text-white mb-4">Context</h2>
-            <div className="space-y-4">
+            <Select
+              label="Select Case"
+              value={selectedCaseId}
+              onChange={(e) => setSelectedCaseId(e.target.value)}
+              options={[{ value: '', label: 'No case selected' }, ...cases.map(c => ({ value: c.id, label: `${c.title} (${c.case_number})` }))]}
+            />
+            {selectedCaseId && documents.length > 0 && (
               <Select
-                label="Select Case"
-                value={selectedCaseId}
-                onChange={(e) => setSelectedCaseId(e.target.value)}
-                options={[{ value: '', label: 'No case selected' }, ...cases.map(c => ({ value: c.id, label: `${c.title} (${c.case_number})` }))]}
+                label="Select Document"
+                value={selectedDocumentId}
+                onChange={(e) => setSelectedDocumentId(e.target.value)}
+                options={[{ value: '', label: 'No document selected' }, ...documents.map(d => ({ value: d.id, label: d.name }))]}
               />
-
-              {selectedCaseId && documents.length > 0 && (
-                <Select
-                  label="Select Document"
-                  value={selectedDocumentId}
-                  onChange={(e) => setSelectedDocumentId(e.target.value)}
-                  options={[{ value: '', label: 'No document selected' }, ...documents.map(d => ({ value: d.id, label: d.name }))]}
-                />
-              )}
-            </div>
+            )}
           </Card>
 
           {selectedCase && (
-            <Card className="mb-6">
-              <h2 className="text-lg font-medium text-white mb-4">Case Information</h2>
-              <div className="space-y-2 text-sm">
-                <div><span className="text-gray-400">Case Type:</span><span className="text-white ml-2">{selectedCase.case_type}</span></div>
-                <div><span className="text-gray-400">Status:</span><span className="text-white ml-2">{selectedCase.status}</span></div>
-                <div><span className="text-gray-400">Client:</span><span className="text-white ml-2">{selectedCase.client?.organization_name || `${selectedCase.client?.first_name || ''} ${selectedCase.client?.last_name || ''}`.trim() || 'Unknown'}</span></div>
-                {selectedCase.opposing_party && (
-                  <div><span className="text-gray-400">Opposing Party:</span><span className="text-white ml-2">{selectedCase.opposing_party?.organization_name || `${selectedCase.opposing_party?.first_name || ''} ${selectedCase.opposing_party?.last_name || ''}`.trim() || 'Unknown'}</span></div>
-                )}
-                {selectedCase.court_name && (
-                  <div><span className="text-gray-400">Court:</span><span className="text-white ml-2">{selectedCase.court_name}</span></div>
-                )}
+            <Card>
+              <h2 className="text-lg font-medium text-white mb-4">Case Info</h2>
+              <div className="space-y-2 text-sm text-white">
+                <p><span className="text-gray-400">Type:</span> {selectedCase.case_type}</p>
+                <p><span className="text-gray-400">Status:</span> {selectedCase.status}</p>
+                <p><span className="text-gray-400">Client:</span> {selectedCase.client?.organization_name || `${selectedCase.client?.first_name} ${selectedCase.client?.last_name}`}</p>
+                <p><span className="text-gray-400">Opposing:</span> {selectedCase.opposing_party?.organization_name || `${selectedCase.opposing_party?.first_name} ${selectedCase.opposing_party?.last_name}`}</p>
+                {selectedCase.court_name && <p><span className="text-gray-400">Court:</span> {selectedCase.court_name}</p>}
               </div>
             </Card>
           )}
 
           <Card>
-            <h2 className="text-lg font-medium text-white mb-4">Suggestion Prompts</h2>
+            <h2 className="text-lg font-medium text-white mb-4">Quick Prompts</h2>
             <div className="space-y-2">
               {[
                 'Draft a demand letter for payment based on the case details.',
@@ -303,15 +275,9 @@ export default function AIAssistantPage() {
                 'Summarize the key facts of this case.',
                 'What are the key deadlines I should be aware of for this foreclosure case?',
                 'What defenses might the opposing party raise?'
-              ].map((text, i) => (
-                <Button
-                  key={i}
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => setInput(text)}
-                >
-                  {text}
+              ].map((prompt, i) => (
+                <Button key={i} variant="outline" size="sm" className="w-full justify-start" onClick={() => setInput(prompt)}>
+                  {prompt}
                 </Button>
               ))}
             </div>
