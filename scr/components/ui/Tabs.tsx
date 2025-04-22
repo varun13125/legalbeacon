@@ -63,3 +63,25 @@ export function TabsTrigger({ children, value, className = '' }: TabsTriggerProp
           ? 'text-blue-400 border-b-2 border-blue-400' 
           : 'text-gray-400 hover:text-gray-300'
       } ${className}`}
+      onClick={() => onValueChange(value)}
+    >
+      {children}
+    </button>
+  );
+}
+
+interface TabsContentProps {
+  children: React.ReactNode;
+  value: string;
+  className?: string;
+}
+
+export function TabsContent({ children, value, className = '' }: TabsContentProps) {
+  const { value: selectedValue } = useTabs();
+  
+  if (selectedValue !== value) {
+    return null;
+  }
+  
+  return <div className={className}>{children}</div>;
+}
