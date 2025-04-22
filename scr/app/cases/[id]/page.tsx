@@ -402,3 +402,623 @@ export default function CaseDetailPage() {
   };
   
   // Helper for file size formatting
+  const formatFileSize = (sizeInBytes: number) => {
+    if (sizeInBytes < 1024) {
+      return `${sizeInBytes} B`;
+    } else if (sizeInBytes < 1024 * 1024) {
+      return `${(sizeInBytes / 1024).toFixed(1)} KB`;
+    } else {
+      return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+  };
+  
+  // Handler for deleting a case
+  const handleDeleteCase = async () => {
+    if (!caseData) return;
+    
+    if (window.confirm('Are you sure you want to delete this case? This action cannot be undone.')) {
+      try {
+        setIsLoading(true);
+        
+        // Delete all related records first
+        await Promise.all([
+          supabase.from('security_interests').delete().eq('case_id', caseData.id),
+          supabase.from('documents').delete().eq('case_id', caseData.id),
+          supabase.from('deadlines').delete().eq('case_id', caseData.id),
+          supabase.from('financials').delete().eq('case_id', caseData.id)
+        ]);
+        
+        // Then delete the case itself
+        const { error } = await supabase
+          .from('cases')
+          .delete()
+          .eq('id', caseData.id);
+        
+        if (error) throw error;
+        
+        // Redirect back to cases list
+        router.push('/cases');
+      } catch (error) {
+        console.error('Error deleting case:', error);
+        alert('Failed to delete the case. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+  
+  if (isLoading) {
+    return (
+      <MainLayout title="Case Details">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </MainLayout>
+    );
+  }
+  
+  if (!caseData) {
+    return (
+      <MainLayout title="Case Not Found">
+        <Card>
+          <div className="text-center py-12">
+            <h2 className="text-xl font-medium text-white mb-2">Case Not Found</h2>
+            <p className="text-gray-400 mb-6">The case you're looking for doesn't exist or you don't have permission to view it.</p>
+            <Link href="/cases">
+              <Button>Back to Cases</Button>
+            </Link>
+          </div>
+        </Card>
+      </MainLayout>
+    );
+  }
+  
+  return (
+    <MainLayout title={caseData.title}>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-white">{caseData.title}</h1>
+            <Badge variant={getStatusBadgeVariant(caseData.status)}>
+              {caseData.status}
+            </Badge>
+          </div>
+          <p className="text-gray-400 mt-1">Case Number: {caseData.case_number}</p>
+        </div>
+        
+        <div className="flex items-center gap-3 mt-4 md:mt-0">
+          <Link href={`/cases/${caseId}/edit`}>
+            <Button variant="outline" className="flex items-center">
+              <PencilIcon className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </Link>
+          
+          <Button variant="danger" className="flex items-center" onClick={handleDeleteCase}>
+            <TrashIcon className="h-4 w-4 mr-2" />
+            Delete
+          </Button>
+        </div>
+      </div>
+      
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="deadlines">Deadlines</TabsTrigger>
+          <TabsTrigger value="financials">Financials</TabsTrigger>
+          {caseData.case_type.toLowerCase() === 'foreclosure' && (
+            <TabsTrigger value="security">Security Interests</TabsTrigger>
+          )}
+        </TabsList>
+        
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Card className="mb-6">
+                <h2 className="text-xl font-semibold text-white mb-4">Case Information</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-400">Title</p>
+                    <p className="text-white">{caseData.title}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Case Number</p>
+                    <p className="text-white">{caseData.case_number}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Case Type</p>
+                    <p className="text-white">{caseData.case_type}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Status</p>
+                    <div>
+                      <Badge variant={getStatusBadgeVariant(caseData.status)}>
+                        {caseData.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Filing Date</p>
+                    <p className="text-white">{formatDate(caseData.filing_date)}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Closure Date</p>
+                    <p className="text-white">{formatDate(caseData.closure_date)}</p>
+                  </div>
+                </div>
+                
+                {caseData.description && (
+                  <div className="mt-6">
+                    <p className="text-sm text-gray-400 mb-2">Description</p>
+                    <p className="text-white whitespace-pre-line">{caseData.description}</p>
+                  </div>
+                )}
+              </Card>
+              
+              <Card className="mb-6">
+                <h2 className="text-xl font-semibold text-white mb-4">Court Information</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-400">Court Name</p>
+                    <p className="text-white">{caseData.court_name || '-'}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Court Location</p>
+                    <p className="text-white">{caseData.court_location || '-'}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm text-gray-400">Judge Name</p>
+                    <p className="text-white">{caseData.judge_name || '-'}</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+            
+            <div className="lg:col-span-1">
+              <Card className="mb-6">
+                <h2 className="text-xl font-semibold text-white mb-4">Parties</h2>
+                
+                <div className="mb-4">
+                  <p className="text-sm text-gray-400 mb-1">Client</p>
+                  {client ? (
+                    <div className="bg-gray-700 p-3 rounded-md">
+                      <p className="text-white font-medium">
+                        {getPartyDisplayName(client)}
+                      </p>
+                      {client.email && <p className="text-gray-300 text-sm">{client.email}</p>}
+                      {client.phone && <p className="text-gray-300 text-sm">{client.phone}</p>}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400">No client information</p>
+                  )}
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-400 mb-1">Opposing Party</p>
+                  {opposingParty ? (
+                    <div className="bg-gray-700 p-3 rounded-md">
+                      <p className="text-white font-medium">
+                        {getPartyDisplayName(opposingParty)}
+                      </p>
+                      {opposingParty.email && <p className="text-gray-300 text-sm">{opposingParty.email}</p>}
+                      {opposingParty.phone && <p className="text-gray-300 text-sm">{opposingParty.phone}</p>}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400">No opposing party information</p>
+                  )}
+                </div>
+              </Card>
+              
+              <Card className="mb-6">
+                <h2 className="text-xl font-semibold text-white mb-4">Assignment</h2>
+                
+                {assignedUser ? (
+                  <div className="bg-gray-700 p-3 rounded-md">
+                    <p className="text-white font-medium">
+                      {`${assignedUser.first_name} ${assignedUser.last_name}`}
+                    </p>
+                    <p className="text-gray-300 text-sm">{assignedUser.email}</p>
+                  </div>
+                ) : (
+                  <p className="text-gray-400">Not assigned</p>
+                )}
+              </Card>
+              
+              <Card>
+                <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
+                
+                <div className="space-y-2">
+                  <Link href={`/cases/${caseId}/documents/new`}>
+                    <Button variant="outline" className="w-full justify-center">
+                      <DocumentIcon className="h-5 w-5 mr-2" />
+                      Add Document
+                    </Button>
+                  </Link>
+                  
+                  <Link href={`/cases/${caseId}/deadlines/new`}>
+                    <Button variant="outline" className="w-full justify-center">
+                      <ClockIcon className="h-5 w-5 mr-2" />
+                      Add Deadline
+                    </Button>
+                  </Link>
+                  
+                  <Link href={`/cases/${caseId}/financials/new`}>
+                    <Button variant="outline" className="w-full justify-center">
+                      <CurrencyDollarIcon className="h-5 w-5 mr-2" />
+                      Add Financial Record
+                    </Button>
+                  </Link>
+                  
+                  {caseData.case_type.toLowerCase() === 'foreclosure' && (
+                    <Link href={`/cases/${caseId}/security/new`}>
+                      <Button variant="outline" className="w-full justify-center">
+                        <HomeIcon className="h-5 w-5 mr-2" />
+                        Add Security Interest
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="documents">
+          <Card>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-white">Documents</h2>
+              <Link href={`/cases/${caseId}/documents/new`}>
+                <Button className="flex items-center">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  Add Document
+                </Button>
+              </Link>
+            </div>
+            
+            {documents.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-400 mb-6">No documents found for this case</p>
+                <Link href={`/cases/${caseId}/documents/new`}>
+                  <Button>
+                    <PlusIcon className="h-5 w-5 mr-2" />
+                    Add Document
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Size
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Uploaded By
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {documents.map((doc) => (
+                      <tr key={doc.id} className="hover:bg-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <DocumentIcon className="h-5 w-5 text-gray-400 mr-3" />
+                            <span className="text-white">{doc.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {doc.document_type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {formatFileSize(doc.file_size)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {doc.uploader_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {formatDate(doc.created_at)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Button variant="outline" size="sm">
+                            View
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="deadlines">
+          <Card>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-white">Deadlines</h2>
+              <Link href={`/cases/${caseId}/deadlines/new`}>
+                <Button className="flex items-center">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  Add Deadline
+                </Button>
+              </Link>
+            </div>
+            
+            {deadlines.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-400 mb-6">No deadlines found for this case</p>
+                <Link href={`/cases/${caseId}/deadlines/new`}>
+                  <Button>
+                    <PlusIcon className="h-5 w-5 mr-2" />
+                    Add Deadline
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Title
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Due Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Priority
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Assigned To
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {deadlines.map((deadline) => (
+                      <tr key={deadline.id} className="hover:bg-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <ClockIcon className="h-5 w-5 text-gray-400 mr-3" />
+                            <span className="text-white">{deadline.title}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {formatDate(deadline.due_date)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge variant={getPriorityBadgeVariant(deadline.priority)}>
+                            {deadline.priority}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge variant={getStatusBadgeVariant(deadline.status)}>
+                            {deadline.status}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {deadline.assignee_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Button variant="outline" size="sm">
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="financials">
+          <Card>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-white">Financial Records</h2>
+              <Link href={`/cases/${caseId}/financials/new`}>
+                <Button className="flex items-center">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  Add Financial Record
+                </Button>
+              </Link>
+            </div>
+            
+            {financials.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-400 mb-6">No financial records found for this case</p>
+                <Link href={`/cases/${caseId}/financials/new`}>
+                  <Button>
+                    <PlusIcon className="h-5 w-5 mr-2" />
+                    Add Financial Record
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Related Party
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Recorded By
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {financials.map((financial) => (
+                      <tr key={financial.id} className="hover:bg-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <CurrencyDollarIcon className="h-5 w-5 text-gray-400 mr-3" />
+                            <span className="text-white">{financial.transaction_type}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          ${financial.amount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {financial.description || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {formatDate(financial.transaction_date)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {financial.party_name || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                          {financial.recorder_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Button variant="outline" size="sm">
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+        
+        {caseData.case_type.toLowerCase() === 'foreclosure' && (
+          <TabsContent value="security">
+            <Card>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-white">Security Interests</h2>
+                <Link href={`/cases/${caseId}/security/new`}>
+                  <Button className="flex items-center">
+                    <PlusIcon className="h-4 w-4 mr-2" />
+                    Add Security Interest
+                  </Button>
+                </Link>
+              </div>
+              
+              {securityInterests.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-400 mb-6">No security interests found for this case</p>
+                  <Link href={`/cases/${caseId}/security/new`}>
+                    <Button>
+                      <PlusIcon className="h-5 w-5 mr-2" />
+                      Add Security Interest
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-700">
+                    <thead>
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Type
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Property
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Lien Position
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Lender
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Borrower
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {securityInterests.map((interest) => (
+                        <tr key={interest.id} className="hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <HomeIcon className="h-5 w-5 text-gray-400 mr-3" />
+                              <span className="text-white">{interest.type}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                            {interest.property_address || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                            ${interest.amount.toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                            {interest.lien_position || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                            {interest.lender_name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                            {interest.borrower_name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
+    </MainLayout>
+  );
+}
