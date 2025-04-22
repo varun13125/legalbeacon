@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { PaperAirplaneIcon, DocumentPlusIcon } from 'react-icons/hi';
+import { HiPaperAirplane, HiDocumentAdd } from 'react-icons/hi';
 import { supabase } from '@/lib/supabase';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card } from '@/components/ui/Card';
@@ -324,7 +324,7 @@ export default function AIAssistantPage() {
                   {isLoading ? (
                     <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
                   ) : (
-                    <PaperAirplaneIcon className="h-5 w-5" />
+                    <HiPaperAirplane className="h-5 w-5" />
                   )}
                 </Button>
               </div>
