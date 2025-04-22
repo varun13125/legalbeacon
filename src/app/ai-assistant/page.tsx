@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { PaperAirplaneIcon, DocumentPlusIcon } from 'react-icons/hi2';
+import { PaperAirplaneIcon, DocumentPlusIcon } from 'react-icons/hi';
 import { supabase } from '@/lib/supabase';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card } from '@/components/ui/Card';
