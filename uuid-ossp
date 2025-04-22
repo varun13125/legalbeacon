@@ -1,0 +1,156 @@
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create firms table
+CREATE TABLE firms (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  logo_url TEXT,
+  subscription_tier TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Create users table (linked to auth.users)
+CREATE TABLE users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  email TEXT NOT NULL UNIQUE,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  phone TEXT,
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  avatar_url TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  last_sign_in TIMESTAMP WITH TIME ZONE
+);
+
+-- Create parties table (clients, opposing parties, etc.)
+CREATE TABLE parties (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  type TEXT NOT NULL, -- Client, Opposing Party, Witness, etc.
+  first_name TEXT,
+  last_name TEXT,
+  organization_name TEXT,
+  email TEXT,
+  phone TEXT,
+  address TEXT,
+  notes TEXT,
+  is_client BOOLEAN NOT NULL,
+  CONSTRAINT valid_name CHECK (
+    (first_name IS NOT NULL AND last_name IS NOT NULL) OR
+    organization_name IS NOT NULL
+  )
+);
+
+-- Create cases table
+CREATE TABLE cases (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  case_number TEXT NOT NULL,
+  title TEXT NOT NULL,
+  case_type TEXT NOT NULL, -- Foreclosure, Civil Litigation, Family Law, etc.
+  status TEXT NOT NULL, -- Open, Closed, Pending, etc.
+  description TEXT,
+  assigned_to UUID REFERENCES users(id),
+  client_id UUID NOT NULL REFERENCES parties(id),
+  opposing_party_id UUID REFERENCES parties(id),
+  court_name TEXT,
+  court_location TEXT,
+  judge_name TEXT,
+  filing_date DATE,
+  closure_date DATE
+);
+
+-- Create security_interests table (for foreclosure cases)
+CREATE TABLE security_interests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  case_id UUID NOT NULL REFERENCES cases(id),
+  type TEXT NOT NULL, -- Mortgage, Deed of Trust, Lien, etc.
+  description TEXT NOT NULL,
+  property_address TEXT,
+  recorded_date DATE,
+  amount DECIMAL(15, 2) NOT NULL,
+  lien_position INTEGER,
+  lender_id UUID NOT NULL REFERENCES parties(id),
+  borrower_id UUID NOT NULL REFERENCES parties(id),
+  maturity_date DATE,
+  interest_rate DECIMAL(5, 2),
+  property_value DECIMAL(15, 2)
+);
+
+-- Create documents table
+CREATE TABLE documents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  case_id UUID NOT NULL REFERENCES cases(id),
+  name TEXT NOT NULL,
+  document_type TEXT NOT NULL, -- Pleading, Correspondence, Contract, etc.
+  file_path TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  uploaded_by UUID NOT NULL REFERENCES users(id),
+  version INTEGER DEFAULT 1,
+  is_template BOOLEAN DEFAULT FALSE,
+  related_party_id UUID REFERENCES parties(id)
+);
+
+-- Create deadlines table
+CREATE TABLE deadlines (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  case_id UUID NOT NULL REFERENCES cases(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  due_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  priority TEXT NOT NULL, -- High, Medium, Low
+  status TEXT NOT NULL, -- Pending, Completed, Overdue
+  assigned_to UUID REFERENCES users(id),
+  reminder_date TIMESTAMP WITH TIME ZONE
+);
+
+-- Create financials table
+CREATE TABLE financials (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  firm_id UUID NOT NULL REFERENCES firms(id),
+  case_id UUID NOT NULL REFERENCES cases(id),
+  transaction_type TEXT NOT NULL, -- Fee, Expense, Retainer, Payment, etc.
+  amount DECIMAL(15, 2) NOT NULL,
+  description TEXT,
+  transaction_date DATE NOT NULL,
+  recorded_by UUID NOT NULL REFERENCES users(id),
+  invoice_id TEXT,
+  party_id UUID REFERENCES parties(id)
+);
+
+-- Create Row Level Security (RLS) policies
+ALTER TABLE firms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE security_interests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deadlines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE financials ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policy for firms table (example)
+CREATE POLICY "Users can view their own firm" ON firms
+  FOR SELECT USING (
+    auth.uid() IN (
+      SELECT id FROM users WHERE firm_id = firms.id
+    )
+  );
+
+-- Create additional RLS policies for each table
+-- These would be customized based on your specific role permissions
