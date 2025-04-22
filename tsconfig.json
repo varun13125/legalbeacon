@@ -14,12 +14,12 @@
     "isolatedModules": true,
     "jsx": "preserve",
 
-    // ← These two enable ‘@/’ to point at src/
+    // ← These two enable `@/` imports to point at `src/`
     "baseUrl": "src",
     "paths": {
       "@/*": ["*"]
     }
   },
-  "exclude": ["node_modules"],
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
