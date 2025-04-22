@@ -13,11 +13,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-
-    // ← These two enable `@/` imports to point at `src/`
     "baseUrl": "src",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["./*"]
     }
   },
   "include": ["src"],
